@@ -88,8 +88,7 @@ def compute_energy_curve(y: np.ndarray, sr: int, hop_length: int = 512, frame_le
 
 
 def _onset_strength(y: np.ndarray, sr: int, hop_length: int = 512) -> np.ndarray:
-    """Compute onset strength envelope using spectral flux."""
-    # STFT
+    """Compute onset strength envelope using spectral flux with O(1) space complexity."""
     n_fft = 2048
     hop = hop_length
     
@@ -99,21 +98,23 @@ def _onset_strength(y: np.ndarray, sr: int, hop_length: int = 512) -> np.ndarray
     n_frames = 1 + (len(y_padded) - n_fft) // hop
     window = signal.windows.hann(n_fft)
     
-    # Compute magnitude spectrogram
-    mag = np.zeros((n_fft // 2 + 1, n_frames))
+    onset = np.zeros(n_frames)
+    prev_mag = np.zeros(n_fft // 2 + 1, dtype=np.float32)
+    
     for i in range(n_frames):
         start = i * hop
         frame = y_padded[start:start + n_fft] * window
         spectrum = np.fft.rfft(frame)
-        mag[:, i] = np.abs(spectrum)
-    
-    # Spectral flux (positive differences only)
-    diff = np.diff(mag, axis=1)
-    diff = np.maximum(0, diff)
-    onset = np.mean(diff, axis=0)
-    
-    # Prepend a zero to match frame count
-    onset = np.concatenate([[0], onset])
+        mag = np.abs(spectrum).astype(np.float32)
+        
+        if i > 0:
+            diff = mag - prev_mag
+            diff = np.maximum(0, diff)
+            onset[i] = np.mean(diff)
+        else:
+            onset[i] = 0
+            
+        prev_mag = mag
     
     return onset
 
