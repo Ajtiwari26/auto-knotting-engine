@@ -8,5 +8,7 @@ services:
     envVars:
       - key: PORT
         value: 5000
+      - key: PYTHONUNBUFFERED
+        value: "1"
     healthCheckPath: /health
     autoDeploy: true

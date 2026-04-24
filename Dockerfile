@@ -17,5 +17,7 @@ COPY src/ src/
 # Expose port
 EXPOSE 5000
 
+ENV PYTHONUNBUFFERED=1
+
 # Start with gunicorn for production
 CMD ["gunicorn", "src.server:app", "--bind", "0.0.0.0:5000", "--timeout", "120", "--workers", "1", "--threads", "2"]
