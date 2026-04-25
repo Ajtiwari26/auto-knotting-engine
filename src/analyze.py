@@ -13,9 +13,9 @@ Each layer independently proposes knot candidates.
 Final stage merges, deduplicates, and applies minimum-duration guardrails.
 
 Usage:
-  python3 src/analyze.py \\
-    --file "test-samples/Song.m4a" \\
-    --sensitivity balanced \\
+  python3 src/analyze.py \
+    --file "test-samples/Song.m4a" \
+    --sensitivity balanced \
     --output output/result.json
 """
 
@@ -90,7 +90,7 @@ def _layer_energy_valleys(energy: dict,
     """
     Scan the RMS energy curve for sustained low-energy valleys.
     
-    A \"valley\" is a contiguous region where energy drops below a 
+    A "valley" is a contiguous region where energy drops below a 
     dynamic threshold for longer than min_duration. These are typically:
     - Musical pauses between verses
     - Instrumental lulls / breathing room
@@ -205,7 +205,7 @@ def _layer_vocal_gaps(centroids: np.ndarray, flatness: np.ndarray, spec_times_ms
     smooth_centroid = uniform_filter1d(centroids, size=40)
     smooth_flatness = uniform_filter1d(flatness, size=40)
     
-    # Build a \"vocal likelihood\" score per frame
+    # Build a "vocal likelihood" score per frame
     # Vocals typically have centroid > 1000 Hz and moderate flatness
     # Normalize centroid to 0-1 range
     c_min, c_max = np.percentile(smooth_centroid, 5), np.percentile(smooth_centroid, 95)
@@ -218,13 +218,13 @@ def _layer_vocal_gaps(centroids: np.ndarray, flatness: np.ndarray, spec_times_ms
     rms_norm = rms_interp / (np.percentile(rms_interp, 90) + 1e-10)
     rms_norm = np.clip(rms_norm, 0, 1)
     
-    # Combined \"vocal activity\" score (More weight to centroid to catch quiet singing)
+    # Combined "vocal activity" score (More weight to centroid to catch quiet singing)
     vocal_score = 0.6 * c_norm + 0.2 * rms_norm + 0.2 * smooth_flatness
     
     # Smooth it further to get a clean signal
     vocal_smooth = uniform_filter1d(vocal_score, size=50)
     
-    # Threshold for \"instrumental\" (low vocal activity)
+    # Threshold for "instrumental" (low vocal activity)
     if sensitivity == "aggressive":
         vocal_thresh = np.percentile(vocal_smooth, 42)  # bottom 42%
         min_gap_ms = 4500
@@ -303,7 +303,7 @@ def _layer_repetition(chroma: np.ndarray, sr: int, sections: list,
         if section_chroma.shape[1] < 5:
             return None
         
-        # Average the chroma across time to get a 12-dim \"harmonic fingerprint\"
+        # Average the chroma across time to get a 12-dim "harmonic fingerprint"
         avg_chroma = np.mean(section_chroma, axis=1)
         # Also keep the chroma sequence for detailed comparison
         return avg_chroma, section_chroma
@@ -489,7 +489,7 @@ def _layer_demucs_vocals(file_path: str, duration_ms: float) -> list:
     from scipy.ndimage import uniform_filter1d
     smoothed = uniform_filter1d(rms, size=30)
     
-    # Vocal threshold: what counts as \"no singing\"
+    # Vocal threshold: what counts as "no singing"
     peak_vocal = np.percentile(smoothed, 95)
     vocal_thresh = peak_vocal * 0.15  # less than 15% of peak vocal energy is silence
     
@@ -570,7 +570,7 @@ def run_analysis(file_path: str, sensitivity: str = "balanced", device_uri: str 
     all_knots = []
 
     # Layer 1: Structural
-    print(f"\\n🏗️  Layer 1: Structural analysis...")
+    print(f"\n🏗️  Layer 1: Structural analysis...")
     l1 = _layer_structural(sections, sensitivity)
     print(f"   → {len(l1)} candidates")
     all_knots.extend(l1)
@@ -592,11 +592,11 @@ def run_analysis(file_path: str, sensitivity: str = "balanced", device_uri: str 
     all_knots.extend(l3)
 
     # Layer 4: Repetition (DISABLED BY USER REQUEST - we don't want to skip stanzas yet)
-    # print(f\"🔁 Layer 4: Repetition detection...\")
-    # l4 = _layer_repetition(feats[\"chroma\"], sr, sections, sensitivity)
-    # print(f\"   → {len(l4)} candidates\")
+    # print(f"🔁 Layer 4: Repetition detection...")
+    # l4 = _layer_repetition(feats["chroma"], sr, sections, sensitivity)
+    # print(f"   → {len(l4)} candidates")
     # for k in l4:
-    #     print(f\"      {k['start_ms']/1000:.1f}s → {k['end_ms']/1000:.1f}s — {k['reason']}\")
+    #     print(f"      {k['start_ms']/1000:.1f}s → {k['end_ms']/1000:.1f}s — {k['reason']}")
     # all_knots.extend(l4)
 
     l5 = []
@@ -608,7 +608,7 @@ def run_analysis(file_path: str, sensitivity: str = "balanced", device_uri: str 
         all_knots.extend(l5)
 
     # ── Merge & Deduplicate ──
-    print(f"\\n🔀 Merging {len(all_knots)} total candidates...")
+    print(f"\n🔀 Merging {len(all_knots)} total candidates...")
     knots = merge_and_deduplicate(all_knots, duration_ms, sensitivity)
     print(f"   → {len(knots)} final knot regions:")
     for i, k in enumerate(knots):
@@ -617,7 +617,7 @@ def run_analysis(file_path: str, sensitivity: str = "balanced", device_uri: str 
               f"({dur:.1f}s) — {k['reason']}")
 
     # ── DSP refinement ──
-    print("\\n✂️  Refining knot boundaries (zero-crossing + beat snap)...")
+    print("\n✂️  Refining knot boundaries (zero-crossing + beat snap)...")
     junctions = []
     for k in knots:
         refined_start, refined_end = refine_knot_boundary(
@@ -685,7 +685,7 @@ def run_analysis(file_path: str, sensitivity: str = "balanced", device_uri: str 
 
     # ── Summary ──
     play_ms = duration_ms - knotted_ms
-    print(f"\\n📋 Summary:")
+    print(f"\n📋 Summary:")
     print(f"   Original:  {duration_ms/1000:.1f}s")
     print(f"   Knotted:   {knotted_ms/1000:.1f}s skipped")
     print(f"   Playback:  {play_ms/1000:.1f}s ({play_ms/duration_ms*100:.0f}% of original)")
@@ -725,11 +725,11 @@ def main():
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
     with open(args.output, "w") as f:
         json.dump(result, f, indent=2)
-    print(f"\\n💾 Saved to: {args.output}")
+    print(f"\n💾 Saved to: {args.output}")
 
     # Print app-compatible JSON
     app_json = {k: v for k, v in result.items() if not k.startswith("_meta")}
-    print(f"\\n📱 App-compatible JSON:")
+    print(f"\n📱 App-compatible JSON:")
     print(json.dumps(app_json, indent=2))
 
 
