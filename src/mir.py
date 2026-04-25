@@ -1,9 +1,9 @@
-\"\"\"
+"""
 mir.py — Music Information Retrieval (No-librosa version)
 ==========================================================
 Uses scipy, numpy, and soundfile directly.
 Finds energy curves, structural sections, and beat grids.
-\"\"\"
+"""
 
 import numpy as np
 import soundfile as sf
@@ -15,16 +15,16 @@ from scipy.spatial.distance import cdist
 
 
 def load_audio(path: str, sr: int = 22050) -> tuple:
-    \"\"\"
+    """
     Load an audio file, convert to mono, and resample to target sr.
     Supports M4A/AAC/MP3 via ffmpeg fallback.
-    \"\"\"
+    """
     try:
         # Try soundfile first (works for WAV, FLAC, OGG)
         y, file_sr = sf.read(path, dtype='float32')
     except Exception:
         # Fallback: use ffmpeg to convert to WAV first (handles M4A, MP3, etc.)
-        print(f\"   Using ffmpeg to decode {os.path.splitext(path)[1]} format...\")
+        print(f"   Using ffmpeg to decode {os.path.splitext(path)[1]} format...")
         with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
             tmp_path = tmp.name
         
@@ -56,11 +56,11 @@ def load_audio(path: str, sr: int = 22050) -> tuple:
 
 
 def compute_energy_curve(y: np.ndarray, sr: int, hop_length: int = 512, frame_length: int = 2048) -> dict:
-    \"\"\"
+    """
     Compute the RMS energy curve over time.
     
     Returns dict with rms, times_ms, mean_energy, energy_threshold.
-    \"\"\"
+    """
     # Compute RMS in frames
     n_frames = 1 + (len(y) - frame_length) // hop_length
     if n_frames <= 0:
@@ -80,19 +80,19 @@ def compute_energy_curve(y: np.ndarray, sr: int, hop_length: int = 512, frame_le
     energy_threshold = mean_energy * 0.6
     
     return {
-        \"rms\": rms,
-        \"times_ms\": times_ms,
-        \"mean_energy\": mean_energy,
-        \"energy_threshold\": energy_threshold,
+        "rms": rms,
+        "times_ms": times_ms,
+        "mean_energy": mean_energy,
+        "energy_threshold": energy_threshold,
     }
 
 
 def extract_features_chunked(y: np.ndarray, sr: int, hop_length: int = 512, n_fft: int = 2048) -> dict:
-    \"\"\"
+    """
     Process audio in chunks to extract all required spectral features.
     This guarantees peak memory stays extremely low (O(chunk_size)) rather than O(song_length),
     strictly enforcing the 512MB limit on the Render free tier.
-    \"\"\"
+    """
     import math
     from scipy.fft import dct
     
@@ -138,7 +138,7 @@ def extract_features_chunked(y: np.ndarray, sr: int, hop_length: int = 512, n_ff
     centroids_list = []
     flatness_list = []
     
-    print(f\"   Processing {n_chunks} streaming chunks for spectral features...\")
+    print(f"   Processing {n_chunks} streaming chunks for spectral features...")
     
     for i in range(n_chunks):
         start = max(0, i * chunk_samples - overlap)
@@ -216,19 +216,19 @@ def extract_features_chunked(y: np.ndarray, sr: int, hop_length: int = 512, n_ff
     spec_times_ms = np.arange(len(onset_full)) * hop_length / sr * 1000.0
     
     return {
-        \"onset_env\": onset_full,
-        \"chroma\": chroma_full,
-        \"mfcc\": mfcc_full,
-        \"centroids\": centroids_full,
-        \"flatness\": flatness_full,
-        \"spec_times_ms\": spec_times_ms
+        "onset_env": onset_full,
+        "chroma": chroma_full,
+        "mfcc": mfcc_full,
+        "centroids": centroids_full,
+        "flatness": flatness_full,
+        "spec_times_ms": spec_times_ms
     }
 
 
 def find_beats(onset_env: np.ndarray, sr: int, y_len: int, hop_length: int = 512) -> dict:
-    \"\"\"
+    """
     Detect tempo and beat positions using autocorrelation of onset strength.
-    \"\"\"
+    """
     # Tempo estimation via autocorrelation
     # Search range: 60-200 BPM
     min_bpm, max_bpm = 60, 200
@@ -284,17 +284,17 @@ def find_beats(onset_env: np.ndarray, sr: int, y_len: int, hop_length: int = 512
     downbeat_times_ms = beat_times_ms[::4] if len(beat_times_ms) >= 4 else beat_times_ms
     
     return {
-        \"tempo\": round(float(tempo), 1),
-        \"beat_times_ms\": beat_times_ms,
-        \"downbeat_times_ms\": downbeat_times_ms,
+        "tempo": round(float(tempo), 1),
+        "beat_times_ms": beat_times_ms,
+        "downbeat_times_ms": downbeat_times_ms,
     }
 
 
 def detect_sections(mfcc: np.ndarray, chroma: np.ndarray, energy: dict, sr: int, n_sections: int = 8) -> list:
-    \"\"\"
+    """
     Detect structural sections using self-similarity on spectral features.
-    \"\"\"
-    duration_ms = energy[\"times_ms\"][-1] if len(energy[\"times_ms\"]) > 0 else 0
+    """
+    duration_ms = energy["times_ms"][-1] if len(energy["times_ms"]) > 0 else 0
     hop_length = 512
     
     # Ensure same number of frames
@@ -324,7 +324,7 @@ def detect_sections(mfcc: np.ndarray, chroma: np.ndarray, energy: dict, sr: int,
     blocked_features = blocked_features / feat_norm
     
     # Self-similarity matrix (cosine similarity)
-    print(\"   Computing self-similarity matrix...\")
+    print("   Computing self-similarity matrix...")
     S = 1 - cdist(blocked_features.T, blocked_features.T, metric='cosine')
     
     # Novelty curve: detect section boundaries using a checkerboard kernel
@@ -367,8 +367,8 @@ def detect_sections(mfcc: np.ndarray, chroma: np.ndarray, energy: dict, sr: int,
     all_bounds = np.sort(np.unique(all_bounds))
     
     # Use provided RMS energy curve for section energy
-    rms = energy[\"rms\"]
-    rms_times_ms = energy[\"times_ms\"]
+    rms = energy["rms"]
+    rms_times_ms = energy["times_ms"]
     
     sections = []
     for i in range(len(all_bounds) - 1):
@@ -380,43 +380,43 @@ def detect_sections(mfcc: np.ndarray, chroma: np.ndarray, energy: dict, sr: int,
         energy = float(np.mean(section_rms)) if len(section_rms) > 0 else 0.0
         
         sections.append({
-            \"start_ms\": start_ms,
-            \"end_ms\": end_ms,
-            \"energy\": energy,
-            \"label\": \"unknown\",
+            "start_ms": start_ms,
+            "end_ms": end_ms,
+            "energy": energy,
+            "label": "unknown",
         })
     
     return sections
 
 
 def classify_sections(sections: list, energy_threshold: float) -> list:
-    \"\"\"
+    """
     Label sections as intro/verse/chorus/bridge/outro based on
     position and energy level.
-    \"\"\"
+    """
     if not sections:
         return sections
     
-    energies = [s[\"energy\"] for s in sections]
+    energies = [s["energy"] for s in sections]
     max_energy = max(energies) if energies else 1.0
     
     for i, section in enumerate(sections):
-        relative_energy = section[\"energy\"] / max_energy if max_energy > 0 else 0
+        relative_energy = section["energy"] / max_energy if max_energy > 0 else 0
         
         if i == 0 and relative_energy < 0.5:
-            section[\"label\"] = \"intro\"
+            section["label"] = "intro"
         elif i == len(sections) - 1 and relative_energy < 0.6:
-            section[\"label\"] = \"outro\"
+            section["label"] = "outro"
         elif relative_energy >= 0.75:
-            section[\"label\"] = \"chorus\"
+            section["label"] = "chorus"
         elif relative_energy >= 0.4:
-            section[\"label\"] = \"verse\"
+            section["label"] = "verse"
         else:
-            section[\"label\"] = \"bridge\"
+            section["label"] = "bridge"
     
     return sections
 
 
 def get_song_duration_ms(y: np.ndarray, sr: int) -> float:
-    \"\"\"Return song duration in milliseconds.\"\"\"
+    """Return song duration in milliseconds."""
     return float(len(y) / sr * 1000.0)
