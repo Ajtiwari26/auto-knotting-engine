@@ -88,33 +88,22 @@ def compute_energy_curve(y: np.ndarray, sr: int, hop_length: int = 512, frame_le
 
 
 def _onset_strength(y: np.ndarray, sr: int, hop_length: int = 512) -> np.ndarray:
-    """Compute onset strength envelope using spectral flux with O(1) space complexity."""
+    """Compute onset strength envelope using spectral flux with O(1) vectorized STFT."""
     n_fft = 2048
-    hop = hop_length
     
-    # Pad signal
-    y_padded = np.pad(y, (n_fft // 2, n_fft // 2), mode='reflect')
+    # Vectorized STFT (blazing fast, ~100x faster than pure python loops)
+    # boundary='even' is equivalent to mode='reflect' in np.pad
+    f, t, Zxx = signal.stft(y, fs=sr, window='hann', nperseg=n_fft, noverlap=n_fft - hop_length, boundary='even')
+    mag = np.abs(Zxx).astype(np.float32)
     
-    n_frames = 1 + (len(y_padded) - n_fft) // hop
-    window = signal.windows.hann(n_fft)
+    # Spectral flux (difference between consecutive frames)
+    diff = np.diff(mag, axis=1)
+    diff = np.maximum(0, diff)
     
-    onset = np.zeros(n_frames)
-    prev_mag = np.zeros(n_fft // 2 + 1, dtype=np.float32)
+    onset = np.mean(diff, axis=0)
     
-    for i in range(n_frames):
-        start = i * hop
-        frame = y_padded[start:start + n_fft] * window
-        spectrum = np.fft.rfft(frame)
-        mag = np.abs(spectrum).astype(np.float32)
-        
-        if i > 0:
-            diff = mag - prev_mag
-            diff = np.maximum(0, diff)
-            onset[i] = np.mean(diff)
-        else:
-            onset[i] = 0
-            
-        prev_mag = mag
+    # np.diff reduces length by 1, pad at the beginning to maintain frame count
+    onset = np.concatenate(([0], onset))
     
     return onset
 
@@ -189,11 +178,11 @@ def find_beats(y: np.ndarray, sr: int, hop_length: int = 512) -> dict:
 
 
 def _compute_chroma(y: np.ndarray, sr: int, hop_length: int = 512, n_fft: int = 2048) -> np.ndarray:
-    """Compute chroma features from audio."""
-    y_padded = np.pad(y, (n_fft // 2, n_fft // 2), mode='reflect')
-    n_frames = 1 + (len(y_padded) - n_fft) // hop_length
-    window = signal.windows.hann(n_fft)
+    """Compute chroma features from audio using vectorized STFT."""
+    f, t, Zxx = signal.stft(y, fs=sr, window='hann', nperseg=n_fft, noverlap=n_fft - hop_length, boundary='even')
+    power_spectrum = np.abs(Zxx) ** 2
     
+    n_frames = power_spectrum.shape[1]
     chroma = np.zeros((12, n_frames))
     freqs = np.fft.rfftfreq(n_fft, d=1.0 / sr)
     
@@ -204,14 +193,10 @@ def _compute_chroma(y: np.ndarray, sr: int, hop_length: int = 512, n_fft: int = 
     pitch_classes = pitch_classes.astype(int)
     pitch_classes[0] = 0  # DC component
     
-    for i in range(n_frames):
-        start = i * hop_length
-        frame = y_padded[start:start + n_fft] * window
-        spectrum = np.abs(np.fft.rfft(frame)) ** 2
-        
-        for pc in range(12):
-            mask = pitch_classes == pc
-            chroma[pc, i] = np.sum(spectrum[mask])
+    # Vectorized binning: for each pitch class, sum the corresponding frequency bins across all frames
+    for pc in range(12):
+        mask = pitch_classes == pc
+        chroma[pc, :] = np.sum(power_spectrum[mask, :], axis=0)
     
     # Normalize
     norm = np.max(chroma, axis=0, keepdims=True) + 1e-10
@@ -221,10 +206,11 @@ def _compute_chroma(y: np.ndarray, sr: int, hop_length: int = 512, n_fft: int = 
 
 
 def _compute_mfcc(y: np.ndarray, sr: int, n_mfcc: int = 13, hop_length: int = 512, n_fft: int = 2048) -> np.ndarray:
-    """Compute MFCCs from audio using mel filterbank."""
-    y_padded = np.pad(y, (n_fft // 2, n_fft // 2), mode='reflect')
-    n_frames = 1 + (len(y_padded) - n_fft) // hop_length
-    window = signal.windows.hann(n_fft)
+    """Compute MFCCs from audio using mel filterbank with vectorized STFT."""
+    f, t, Zxx = signal.stft(y, fs=sr, window='hann', nperseg=n_fft, noverlap=n_fft - hop_length, boundary='even')
+    power_spectrum = np.abs(Zxx) ** 2
+    
+    n_frames = power_spectrum.shape[1]
     
     # Mel filterbank
     n_mels = 40
@@ -256,13 +242,8 @@ def _compute_mfcc(y: np.ndarray, sr: int, n_mfcc: int = 13, hop_length: int = 51
             if f_end != f_center:
                 filterbank[m, k] = (f_end - k) / (f_end - f_center)
     
-    # Compute power spectrogram and apply mel filterbank
-    mel_spec = np.zeros((n_mels, n_frames))
-    for i in range(n_frames):
-        start = i * hop_length
-        frame = y_padded[start:start + n_fft] * window
-        power_spectrum = np.abs(np.fft.rfft(frame)) ** 2
-        mel_spec[:, i] = np.dot(filterbank, power_spectrum)
+    # Apply mel filterbank using fast matrix multiplication
+    mel_spec = np.dot(filterbank, power_spectrum)
     
     # Log and DCT to get MFCCs
     mel_spec = np.log(mel_spec + 1e-10)

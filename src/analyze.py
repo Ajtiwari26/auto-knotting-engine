@@ -190,39 +190,25 @@ def _layer_energy_valleys(y: np.ndarray, sr: int, energy: dict,
 # ══════════════════════════════════════════════════════════════
 def _compute_spectral_centroid(y: np.ndarray, sr: int, hop_length: int = 512,
                                 n_fft: int = 2048) -> tuple:
-    """
-    Compute spectral centroid over time.
-    
-    Vocal content has higher spectral centroid (1000-4000 Hz).
-    Pure instrumental passages (tabla, sitar pads, bass) sit lower.
-    Musical interludes with just instruments have a distinctly different
-    centroid + flatness profile than vocal sections.
-    """
+    """Compute spectral centroid and flatness over time using vectorized STFT."""
     from scipy import signal as sig
     
-    y_padded = np.pad(y, (n_fft // 2, n_fft // 2), mode='reflect')
-    n_frames = 1 + (len(y_padded) - n_fft) // hop_length
-    window = sig.windows.hann(n_fft)
+    f, t, Zxx = sig.stft(y, fs=sr, window='hann', nperseg=n_fft, noverlap=n_fft - hop_length, boundary='even')
+    mag = np.abs(Zxx)
     
-    centroids = np.zeros(n_frames)
-    flatness = np.zeros(n_frames)
     freqs = np.fft.rfftfreq(n_fft, d=1.0 / sr)
+    freqs = freqs[:, np.newaxis]  # shape (n_freqs, 1)
     
-    for i in range(n_frames):
-        start = i * hop_length
-        frame = y_padded[start:start + n_fft] * window
-        mag = np.abs(np.fft.rfft(frame))
-        mag_sum = np.sum(mag)
-        
-        if mag_sum > 1e-10:
-            centroids[i] = np.sum(freqs * mag) / mag_sum
-            # Spectral flatness (Wiener entropy): geometric_mean / arithmetic_mean
-            log_mag = np.log(mag + 1e-10)
-            geo_mean = np.exp(np.mean(log_mag))
-            arith_mean = np.mean(mag)
-            flatness[i] = geo_mean / (arith_mean + 1e-10)
+    mag_sum = np.sum(mag, axis=0) + 1e-10
+    centroids = np.sum(freqs * mag, axis=0) / mag_sum
     
-    times_ms = np.arange(n_frames) * hop_length / sr * 1000.0
+    # Spectral flatness (Wiener entropy): geometric_mean / arithmetic_mean
+    log_mag = np.log(mag + 1e-10)
+    geo_mean = np.exp(np.mean(log_mag, axis=0))
+    arith_mean = np.mean(mag, axis=0)
+    flatness = geo_mean / (arith_mean + 1e-10)
+    
+    times_ms = np.arange(mag.shape[1]) * hop_length / sr * 1000.0
     return centroids, flatness, times_ms
 
 
