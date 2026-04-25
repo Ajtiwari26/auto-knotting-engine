@@ -12,7 +12,7 @@ import os
 import tempfile
 import json
 from flask import Flask, request, jsonify
-from src.analyze import analyze_song
+from src.analyze import run_analysis
 
 app = Flask(__name__)
 
@@ -36,7 +36,7 @@ def analyze():
         
     try:
         print(f"--- Analysis Start: {audio_file.filename} ---")
-        result = analyze_song(tmp_path, sensitivity=sensitivity)
+        result = run_analysis(tmp_path, sensitivity=sensitivity)
         
         # Add metadata
         result["_id"] = device_uri or audio_file.filename
