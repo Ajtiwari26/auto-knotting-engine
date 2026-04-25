@@ -39,6 +39,7 @@ from mir import (
     classify_sections,
     find_beats,
     get_song_duration_ms,
+    extract_features_chunked,
 )
 from dsp import refine_knot_boundary, validate_transition
 
@@ -84,7 +85,7 @@ def _layer_structural(sections: list, sensitivity: str) -> list:
 # ══════════════════════════════════════════════════════════════
 # LAYER 2: ENERGY VALLEYS — find sustained quiet dips mid-song
 # ══════════════════════════════════════════════════════════════
-def _layer_energy_valleys(y: np.ndarray, sr: int, energy: dict,
+def _layer_energy_valleys(energy: dict,
                           duration_ms: float, sensitivity: str) -> list:
     """
     Scan the RMS energy curve for sustained low-energy valleys.
@@ -188,47 +189,12 @@ def _layer_energy_valleys(y: np.ndarray, sr: int, energy: dict,
 # ══════════════════════════════════════════════════════════════
 # LAYER 3: VOCAL GAP DETECTION — find long instrumental passages
 # ══════════════════════════════════════════════════════════════
-def _compute_spectral_centroid(y: np.ndarray, sr: int, hop_length: int = 512,
-                                n_fft: int = 2048) -> tuple:
-    """Compute spectral centroid and flatness over time using vectorized STFT."""
-    from scipy import signal as sig
-    
-    f, t, Zxx = sig.stft(y, fs=sr, window='hann', nperseg=n_fft, noverlap=n_fft - hop_length, boundary='even')
-    mag = np.abs(Zxx)
-    
-    freqs = np.fft.rfftfreq(n_fft, d=1.0 / sr)
-    freqs = freqs[:, np.newaxis]  # shape (n_freqs, 1)
-    
-    mag_sum = np.sum(mag, axis=0) + 1e-10
-    centroids = np.sum(freqs * mag, axis=0) / mag_sum
-    
-    # Spectral flatness (Wiener entropy): geometric_mean / arithmetic_mean
-    log_mag = np.log(mag + 1e-10)
-    geo_mean = np.exp(np.mean(log_mag, axis=0))
-    arith_mean = np.mean(mag, axis=0)
-    flatness = geo_mean / (arith_mean + 1e-10)
-    
-    times_ms = np.arange(mag.shape[1]) * hop_length / sr * 1000.0
-    return centroids, flatness, times_ms
-
-
-def _layer_vocal_gaps(y: np.ndarray, sr: int, energy: dict,
-                       duration_ms: float, sensitivity: str) -> list:
+def _layer_vocal_gaps(centroids: np.ndarray, flatness: np.ndarray, spec_times_ms: np.ndarray,
+                      energy: dict, duration_ms: float, sensitivity: str) -> list:
     """
     Detect long instrumental-only passages using spectral features.
-    
-    Strategy: Vocal content has:
-    - Higher spectral centroid (voice formants 300-3500 Hz)
-    - More energy variability (phrasing, consonants)
-    - Higher spectral flatness for "noisy" consonants
-    
-    Instrumental interludes have:
-    - Lower/narrower spectral centroid
-    - Smoother energy envelope
-    - Lower spectral flatness for tonal instruments
     """
     print("   Computing spectral features for vocal gap detection...")
-    centroids, flatness, spec_times_ms = _compute_spectral_centroid(y, sr)
     rms = energy["rms"]
     
     if len(centroids) < 20:
@@ -303,20 +269,15 @@ def _layer_vocal_gaps(y: np.ndarray, sr: int, energy: dict,
 # ══════════════════════════════════════════════════════════════
 # LAYER 4: REPETITION — skip redundant repeated sections
 # ══════════════════════════════════════════════════════════════
-def _layer_repetition(y: np.ndarray, sr: int, sections: list,
+def _layer_repetition(chroma: np.ndarray, sr: int, sections: list,
                        sensitivity: str) -> list:
     """
     Detect sections that are near-duplicates of earlier sections
     using Chromagram + Self-Similarity Matrix (SSM).
-    
-    Instead of basic RMS fingerprinting, this uses the harmonic content
-    (chroma features) to identify repeated chorus/verse patterns.
-    Only the 3rd+ repetition of a pattern is knotted.
     """
     if sensitivity == "light":
         return []  # light mode doesn't skip repeats
     
-    from mir import _compute_chroma
     from scipy.spatial.distance import cdist
     from scipy.ndimage import uniform_filter1d
     
@@ -329,9 +290,7 @@ def _layer_repetition(y: np.ndarray, sr: int, sections: list,
     if len(labeled) < 3:  # Need at least 3 to skip the 3rd+
         return []
     
-    # Compute full chromagram once (reuse mir.py's chroma)
-    print("   Computing chromagram for repetition detection...")
-    chroma = _compute_chroma(y, sr, hop_length=hop_length)
+    print("   Analyzing chromagram for repetition detection...")
     
     def _section_chroma_fingerprint(section):
         """Extract averaged chroma vector for a section."""
@@ -564,6 +523,9 @@ def run_analysis(file_path: str, sensitivity: str = "balanced", device_uri: str 
     y, sr = load_audio(file_path)
     duration_ms = get_song_duration_ms(y, sr)
     print(f"   Duration: {duration_ms/1000:.1f}s | Sample rate: {sr}Hz | Samples: {len(y):,}")
+    
+    print("🧠 Extracting spectral features in streaming chunks (memory-efficient)...")
+    feats = extract_features_chunked(y, sr)
 
     # ── Step 1: Energy curve ──
     print("📊 Computing energy curve...")
@@ -572,13 +534,13 @@ def run_analysis(file_path: str, sensitivity: str = "balanced", device_uri: str 
 
     # ── Step 2: Beat tracking ──
     print("🥁 Detecting beats...")
-    beats = find_beats(y, sr)
+    beats = find_beats(feats["onset_env"], sr, len(y))
     print(f"   Tempo: {beats['tempo']:.1f} BPM | Beats: {len(beats['beat_times_ms'])} | "
           f"Downbeats: {len(beats['downbeat_times_ms'])}")
 
     # ── Step 3: Section detection ──
     print("🔍 Detecting song sections...")
-    sections = detect_sections(y, sr, n_sections=10)  # more sections for finer granularity
+    sections = detect_sections(feats["mfcc"], feats["chroma"], energy, sr, n_sections=10)
     sections = classify_sections(sections, energy["energy_threshold"])
     print(f"   Found {len(sections)} sections:")
     for i, s in enumerate(sections):
@@ -599,7 +561,7 @@ def run_analysis(file_path: str, sensitivity: str = "balanced", device_uri: str 
 
     # Layer 2: Energy valleys
     print(f"📉 Layer 2: Energy valley detection...")
-    l2 = _layer_energy_valleys(y, sr, energy, duration_ms, sensitivity)
+    l2 = _layer_energy_valleys(energy, duration_ms, sensitivity)
     print(f"   → {len(l2)} candidates")
     for k in l2:
         print(f"      {k['start_ms']/1000:.1f}s → {k['end_ms']/1000:.1f}s — {k['reason']}")
@@ -607,7 +569,7 @@ def run_analysis(file_path: str, sensitivity: str = "balanced", device_uri: str 
 
     # Layer 3: Vocal gaps
     print(f"🎤 Layer 3: Vocal gap detection...")
-    l3 = _layer_vocal_gaps(y, sr, energy, duration_ms, sensitivity)
+    l3 = _layer_vocal_gaps(feats["centroids"], feats["flatness"], feats["spec_times_ms"], energy, duration_ms, sensitivity)
     print(f"   → {len(l3)} candidates")
     for k in l3:
         print(f"      {k['start_ms']/1000:.1f}s → {k['end_ms']/1000:.1f}s — {k['reason']}")
@@ -615,7 +577,7 @@ def run_analysis(file_path: str, sensitivity: str = "balanced", device_uri: str 
 
     # Layer 4: Repetition
     print(f"🔁 Layer 4: Repetition detection...")
-    l4 = _layer_repetition(y, sr, sections, sensitivity)
+    l4 = _layer_repetition(feats["chroma"], sr, sections, sensitivity)
     print(f"   → {len(l4)} candidates")
     for k in l4:
         print(f"      {k['start_ms']/1000:.1f}s → {k['end_ms']/1000:.1f}s — {k['reason']}")
