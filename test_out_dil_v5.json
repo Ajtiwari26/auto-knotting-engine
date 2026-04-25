@@ -1,0 +1,107 @@
+{
+  "_id": "file:///storage/emulated/0/Audior/dil_mein.m4a",
+  "name": "Auto-Knot",
+  "junctions": [
+    {
+      "start_ms": 0.0,
+      "end_ms": 8357.8
+    },
+    {
+      "start_ms": 36363.5,
+      "end_ms": 39007.1
+    },
+    {
+      "start_ms": 69173.7,
+      "end_ms": 85935.5
+    },
+    {
+      "start_ms": 150722.4,
+      "end_ms": 153761.0
+    },
+    {
+      "start_ms": 268632.9,
+      "end_ms": 284047.7
+    },
+    {
+      "start_ms": 294105.0,
+      "end_ms": 296703.0
+    }
+  ],
+  "knotted_duration_ms": 48814.6,
+  "original_duration_ms": 372610.6,
+  "createdAt": 1777109397197,
+  "_meta": {
+    "sensitivity": "aggressive",
+    "layers_used": {
+      "structural": 1,
+      "energy_valley": 0,
+      "vocal_gap": 5,
+      "repetition": 0,
+      "demucs_vocal": 0
+    },
+    "sections": [
+      {
+        "label": "intro",
+        "start_ms": 0.0,
+        "end_ms": 9288.0,
+        "energy": 0.028
+      },
+      {
+        "label": "verse",
+        "start_ms": 9288.0,
+        "end_ms": 27863.9,
+        "energy": 0.0599
+      },
+      {
+        "label": "chorus",
+        "start_ms": 27863.9,
+        "end_ms": 68731.1,
+        "energy": 0.1141
+      },
+      {
+        "label": "chorus",
+        "start_ms": 68731.1,
+        "end_ms": 87307.0,
+        "energy": 0.1063
+      },
+      {
+        "label": "chorus",
+        "start_ms": 87307.0,
+        "end_ms": 109598.2,
+        "energy": 0.1029
+      },
+      {
+        "label": "chorus",
+        "start_ms": 109598.2,
+        "end_ms": 137462.1,
+        "energy": 0.1107
+      },
+      {
+        "label": "chorus",
+        "start_ms": 137462.1,
+        "end_ms": 202478.0,
+        "energy": 0.1008
+      },
+      {
+        "label": "chorus",
+        "start_ms": 202478.0,
+        "end_ms": 284212.2,
+        "energy": 0.106
+      },
+      {
+        "label": "chorus",
+        "start_ms": 284212.2,
+        "end_ms": 343655.3,
+        "energy": 0.1106
+      },
+      {
+        "label": "verse",
+        "start_ms": 343655.3,
+        "end_ms": 372517.7,
+        "energy": 0.0802
+      }
+    ],
+    "tempo_bpm": 184.6,
+    "analysis_file": "dil_mein.m4a"
+  }
+}

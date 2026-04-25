@@ -1,0 +1,3 @@
+UPDATE catalystLocalStorage 
+SET value = '{"_id":"file:///storage/emulated/0/Audior/Dil Mein Ek Laher Si Uthi Hai Abhi Album The Latest N Best Ghazals Ghulam Ali - Ghulam Ali.m4a","name":"Auto-Knot (High Fidelity)","junctions":[{"start_ms":0.0,"end_ms":8957.8},{"start_ms":35880.1,"end_ms":39492.0},{"start_ms":69107.9,"end_ms":86535.5},{"start_ms":137745.9,"end_ms":202101.1},{"start_ms":213815.2,"end_ms":217518.9},{"start_ms":268126.5,"end_ms":343394.5}],"knotted_duration_ms":173324.2,"original_duration_ms":372610.6,"createdAt":1777107757398}'
+WHERE key = 'knot_data_file:///storage/emulated/0/Audior/Dil Mein Ek Laher Si Uthi Hai Abhi Album The Latest N Best Ghazals Ghulam Ali - Ghulam Ali.m4a';
