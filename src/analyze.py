@@ -111,8 +111,8 @@ def _layer_energy_valleys(energy: dict,
     mean_energy = np.mean(smoothed)
     
     if sensitivity == "aggressive":
-        valley_thresh = mean_energy * 0.65   # anything below 65% of mean
-        min_valley_ms = 3000                  # 3s minimum
+        valley_thresh = mean_energy * 0.70   # anything below 70% of mean
+        min_valley_ms = 3500                  # 3.5s minimum
     elif sensitivity == "balanced":
         valley_thresh = mean_energy * 0.45    # below 45% of mean
         min_valley_ms = 4000                  # 4s minimum
@@ -226,8 +226,8 @@ def _layer_vocal_gaps(centroids: np.ndarray, flatness: np.ndarray, spec_times_ms
     
     # Threshold for "instrumental" (low vocal activity)
     if sensitivity == "aggressive":
-        vocal_thresh = np.percentile(vocal_smooth, 42)  # bottom 42%
-        min_gap_ms = 4500
+        vocal_thresh = np.percentile(vocal_smooth, 48)  # bottom 48%
+        min_gap_ms = 3500
     elif sensitivity == "balanced":
         vocal_thresh = np.percentile(vocal_smooth, 35)  # bottom 35%
         min_gap_ms = 5000
@@ -628,7 +628,7 @@ def run_analysis(file_path: str, sensitivity: str = "balanced", device_uri: str 
 
         # Apply 1000ms phrase buffer to protect lyrics (shrink knot by 1s on both sides)
         # Only apply if not at the absolute start or end of the song
-        buffer_ms = 1000.0
+        buffer_ms = 700.0 if sensitivity == "aggressive" else 1000.0
         final_start = refined_start
         final_end = refined_end
         

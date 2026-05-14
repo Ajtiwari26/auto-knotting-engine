@@ -28,6 +28,7 @@ def analyze():
     audio_file = request.files['file']
     sensitivity = request.form.get('sensitivity', 'balanced')
     device_uri = request.form.get('device_uri', '')
+    engine = request.form.get('engine', 'fast')
     
     # Create a temporary file to store the upload
     with tempfile.NamedTemporaryFile(suffix=os.path.splitext(audio_file.filename)[1], delete=False) as tmp:
@@ -35,8 +36,8 @@ def analyze():
         tmp_path = tmp.name
         
     try:
-        print(f"--- Analysis Start: {audio_file.filename} ---")
-        result = run_analysis(tmp_path, sensitivity=sensitivity)
+        print(f"--- Analysis Start: {audio_file.filename} (Engine: {engine}) ---")
+        result = run_analysis(tmp_path, sensitivity=sensitivity, engine=engine)
         
         # Add metadata
         result["_id"] = device_uri or audio_file.filename

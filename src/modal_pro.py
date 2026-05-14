@@ -47,11 +47,18 @@ pro_image = (
 )
 
 
+# -- Source Mount --
+src_mount = modal.Mount.from_local_dir(
+    "src",
+    remote_path="/root"
+)
+
 @app.function(
     image=pro_image,
     gpu="T4",
-    timeout=300,  # 5 minute max
-    memory=4096,  # 4GB RAM
+    timeout=600,  # Increased to 10 minutes for Demucs
+    memory=8192,  # Increased to 8GB for Demucs
+    mounts=[src_mount],
     allow_concurrent_inputs=5,
 )
 def analyze_pro(audio_bytes: bytes, filename: str = "input.m4a",
@@ -80,7 +87,6 @@ def analyze_pro(audio_bytes: bytes, filename: str = "input.m4a",
     
     try:
         # Add source directory to path
-        # The source files are copied into the container
         sys.path.insert(0, '/root')
         
         from analyze import run_analysis
@@ -98,9 +104,8 @@ def analyze_pro(audio_bytes: bytes, filename: str = "input.m4a",
             'knotted_duration_ms': result['knotted_duration_ms'],
             'original_duration_ms': result['original_duration_ms'],
             'analysis_time_s': round(elapsed, 2),
-            'engine': 'pro',
-            'knot_count': len(result['junctions']),
-            '_meta': result.get('_meta', {}),
+            'gpu': 'T4',
+            'timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ'),
         }
     finally:
         if os.path.exists(tmp_path):
@@ -126,40 +131,32 @@ def health_check() -> dict:
 # This creates a public HTTPS endpoint that the Node.js backend can call
 @app.function(
     image=pro_image,
-    gpu="T4",
-    timeout=300,
-    memory=4096,
-    allow_concurrent_inputs=5,
+    timeout=600,
 )
 @modal.web_endpoint(method="POST")
-async def analyze_web(request: dict) -> dict:
+async def analyze_web(request: modal.Request) -> dict:
     """
     Web endpoint for the Pro engine.
     
-    Accepts JSON with base64-encoded audio:
-    {
-      "audio_base64": "...",
-      "filename": "song.m4a",
-      "sensitivity": "balanced"
-    }
+    Accepts multipart/form-data:
+    - file: Audio file
+    - sensitivity: 'balanced' | 'aggressive' | 'light'
+    - engine: 'pro'
     """
-    import base64
-    import time
+    form = await request.form()
+    audio_file = form.get('file')
+    sensitivity = form.get('sensitivity', 'balanced')
     
-    start_time = time.time()
+    if not audio_file:
+        return {'error': 'No file in request body'}
     
-    audio_b64 = request.get('audio_base64', '')
-    filename = request.get('filename', 'input.m4a')
-    sensitivity = request.get('sensitivity', 'balanced')
+    # Read the file bytes
+    audio_bytes = await audio_file.read()
     
-    if not audio_b64:
-        return {'error': 'No audio_base64 in request body'}, 400
-    
-    audio_bytes = base64.b64decode(audio_b64)
-    
-    result = analyze_pro.local(
+    # Trigger the heavy GPU function remotely
+    result = analyze_pro.remote(
         audio_bytes=audio_bytes,
-        filename=filename,
+        filename=audio_file.filename or 'input.m4a',
         sensitivity=sensitivity,
     )
     
